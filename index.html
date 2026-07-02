@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foldviksskogen – Innredningsplanlegger</title>
+<style>
+  :root{
+    --bg:#f4f1ec; --panel:#ffffff; --ink:#2c2a26; --muted:#8a857c;
+    --line:#e6e1d8; --accent:#7d8b74; --accent-dark:#5f6c57;
+    --gold:#c9a24b; --soft:#faf8f4; --shadow:0 2px 12px rgba(0,0,0,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);display:flex;min-height:100vh}
+  /* Sidebar */
+  .sidebar{width:240px;background:var(--panel);border-right:1px solid var(--line);
+    padding:24px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0}
+  .brand{font-size:20px;font-weight:700;letter-spacing:.3px;margin:0 8px 4px}
+  .brand small{display:block;font-size:11px;font-weight:500;color:var(--muted);
+    text-transform:uppercase;letter-spacing:2px;margin-top:4px}
+  .nav{margin-top:24px;display:flex;flex-direction:column;gap:2px}
+  .nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+    background:none;border:none;padding:11px 12px;border-radius:10px;cursor:pointer;
+    font-size:14.5px;color:var(--ink);transition:.15s}
+  .nav button:hover{background:var(--soft)}
+  .nav button.active{background:var(--accent);color:#fff}
+  .nav .ico{font-size:17px;width:22px;text-align:center}
+  .nav-sep{height:1px;background:var(--line);margin:12px 8px}
+  .io{display:flex;gap:8px;margin:16px 8px 0}
+  .io button{flex:1;font-size:12px;padding:8px;border:1px solid var(--line);
+    background:var(--soft);border-radius:8px;cursor:pointer;color:var(--muted)}
+  .io button:hover{color:var(--ink);border-color:var(--accent)}
+  /* Main */
+  .main{flex:1;padding:36px 44px;max-width:1200px}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;
+    flex-wrap:wrap;gap:16px;margin-bottom:8px}
+  h1{font-size:30px;margin:0;font-weight:700}
+  .sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+  /* Tabs */
+  .tabs{display:flex;gap:4px;margin:26px 0 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tabs button{background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px;
+    color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs button.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  /* Cards / grid */
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  /* Moodboard: bokser tilpasset bildets eget format */
+  .masonry{column-width:230px;column-gap:18px}
+  .masonry>*{break-inside:avoid;margin-bottom:18px;width:100%}
+  .masonry .card img{height:auto;max-height:none}
+  .masonry .add-tile{min-height:150px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .card img{width:100%;height:170px;object-fit:cover;background:var(--soft);cursor:pointer}
+  .card-body{padding:12px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card-title{font-weight:600;font-size:14.5px}
+  .card-price{color:var(--accent-dark);font-weight:600;font-size:13px}
+  .card-cap{font-size:13px;color:var(--muted)}
+  .card a.link{font-size:12.5px;color:var(--gold);text-decoration:none;word-break:break-all}
+  .card a.link:hover{text-decoration:underline}
+  .buy-btn{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--accent-dark);
+    text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:5px 10px;
+    background:var(--soft);margin:2px 4px 2px 0;max-width:100%}
+  .buy-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .buy-btn:hover{border-color:var(--accent);background:#fff}
+  .buy-links{display:flex;flex-wrap:wrap;margin-top:2px}
+  .link-row{display:flex;gap:6px;margin-bottom:6px}
+  .link-row input{flex:1}
+  .link-row .del{font-size:15px;padding:0 8px}
+  .add-link{padding:7px 12px;font-size:13px;border-radius:8px;margin-top:2px;cursor:pointer;
+    border:1px solid var(--line);background:var(--soft);color:var(--muted)}
+  .add-link:hover{border-color:var(--accent);color:var(--ink)}
+  .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px}
+  .badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600}
+  .b-vurderer{background:#eef0e9;color:#5f6c57}
+  .b-onsker{background:#f7ecd5;color:#9a7720}
+  .b-bestilt{background:#e2ecf3;color:#37698c}
+  .b-kjopt{background:#e3f0e3;color:#3d7a45}
+  .del{background:none;border:none;color:#c98b8b;cursor:pointer;font-size:13px;padding:2px 6px}
+  .del:hover{color:#a13b3b}
+  /* Add tile */
+  .add-tile{border:2px dashed var(--line);border-radius:var(--radius);background:var(--soft);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;
+    min-height:200px;cursor:pointer;color:var(--muted);font-size:14px;transition:.15s}
+  .add-tile:hover{border-color:var(--accent);color:var(--accent-dark);background:#fff}
+  .add-tile .plus{font-size:34px;font-weight:300;line-height:1}
+  .empty{color:var(--muted);font-size:14px;padding:30px 0;text-align:center}
+  /* Notes / palette / dims */
+  .panel-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;box-shadow:var(--shadow)}
+  textarea,input[type=text],input[type=url],input[type=number],select{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;
+    font-size:14px;font-family:inherit;background:var(--soft);color:var(--ink)}
+  textarea{min-height:180px;resize:vertical}
+  label.fl{display:block;font-size:12.5px;color:var(--muted);margin:0 0 5px;font-weight:600}
+  .field{margin-bottom:16px}
+  .swatches{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .swatch{width:54px;height:54px;border-radius:10px;border:1px solid rgba(0,0,0,.1);position:relative}
+  .swatch .x{position:absolute;top:-6px;right:-6px;background:#fff;border:1px solid var(--line);
+    border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:18px;text-align:center}
+  .swatch-add{width:54px;height:54px;border-radius:10px;border:2px dashed var(--line);
+    background:none;cursor:pointer;color:var(--muted);font-size:22px}
+  /* Dashboard */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow)}
+  .stat .n{font-size:28px;font-weight:700}
+  .stat .l{font-size:13px;color:var(--muted);margin-top:2px}
+  .room-rows{display:flex;flex-direction:column;gap:10px}
+  .room-row{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:14px 18px;cursor:pointer;transition:.15s}
+  .room-row:hover{border-color:var(--accent);transform:translateX(2px)}
+  .room-row .ico{font-size:22px}
+  .room-row .rname{font-weight:600;flex:1}
+  .room-row .rmeta{font-size:13px;color:var(--muted)}
+  .bar{height:7px;background:var(--line);border-radius:6px;overflow:hidden;width:120px}
+  .bar i{display:block;height:100%;background:var(--accent)}
+  /* Modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(40,38,34,.5);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--panel);border-radius:18px;padding:26px;width:480px;max-width:100%;
+    max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .modal h3{margin:0 0 18px;font-size:19px}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+  .btn{padding:10px 18px;border-radius:9px;border:none;cursor:pointer;font-size:14px;font-weight:600}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:var(--accent-dark)}
+  .btn-ghost{background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+  .img-pick{display:flex;gap:8px;margin-top:6px}
+  .img-pick label{flex:1;text-align:center;padding:9px;border:1px solid var(--line);border-radius:9px;
+    cursor:pointer;font-size:13px;color:var(--muted);background:var(--soft)}
+  .img-pick label:hover{border-color:var(--accent)}
+  .preview{margin-top:12px;border-radius:10px;max-height:160px;width:100%;object-fit:cover;display:none}
+  /* Lightbox */
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;
+    justify-content:center;z-index:60;padding:30px;cursor:zoom-out}
+  .lightbox.show{display:flex}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  @media(max-width:760px){
+    body{flex-direction:column}
+    .sidebar{width:100%;height:auto;position:relative;border-right:none;border-bottom:1px solid var(--line)}
+    .main{padding:24px 18px}
+    .nav{flex-direction:row;flex-wrap:wrap}
+    .nav button{width:auto}
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">Foldviksskogen<small>Innredningsplan</small></div>
+  <nav class="nav" id="nav"></nav>
+  <div class="io">
+    <button onclick="exportData()">⬇ Eksporter</button>
+    <button onclick="document.getElementById('importFile').click()">⬆ Importer</button>
+    <input type="file" id="importFile" accept="application/json" hidden onchange="importData(event)">
+  </div>
+</aside>
+
+<main class="main" id="main"></main>
+
+<!-- Modal: produkt -->
+<div class="modal-bg" id="modal">
+  <div class="modal" id="modalInner"></div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('show')">
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+/* ---------- Rooms ---------- */
+const ROOMS = [
+  {id:'oversikt',   name:'Oversikt',         ico:'🏠', dashboard:true},
+  {id:'barnerom',   name:'Barnerom',         ico:'🧸'},
+  {id:'kontor',     name:'Kontor / lager',   ico:'💼'},
+  {id:'ylva',       name:'Ylvas soverom',    ico:'🛏️'},
+  {id:'amund',      name:'Amunds soverom',   ico:'🛌'},
+  {id:'stue',       name:'Stue',             ico:'🛋️'},
+  {id:'kjokken',    name:'Kjøkken',          ico:'🍳'},
+  {id:'bad',        name:'Bad',              ico:'🛁'},
+  {id:'gang',       name:'Gang',             ico:'🚪'},
+  {id:'uteplass',   name:'Uteplass',         ico:'🌳'},
+  {id:'veranda',    name:'Veranda',          ico:'🪴'},
+];
+const STATUS = {
+  vurderer:{label:'Vurderer', cls:'b-vurderer'},
+  onsker:  {label:'Ønsker',   cls:'b-onsker'},
+  bestilt: {label:'Bestilt',  cls:'b-bestilt'},
+  kjopt:   {label:'Kjøpt',    cls:'b-kjopt'},
+};
+
+/* ---------- Seeds (auto-added once) ---------- */
+const SEED = [
+  {seedId:'barnerom-tipi', room:'barnerom', product:{
+    name:'Tipi-telt / lekekrok',
+    price:'',
+    link:'',
+    status:'onsker',
+    note:'Koselig lesekrok med lyslenke, puter og saueskinn',
+    img:'Barnerom/Tipi.jpg'
+  }},
+];
+
+/* ---------- State ---------- */
+const KEY='foldviksskogen_v1';
+let data = load();
+let current = 'oversikt';
+let activeTab = 'inspirasjon';
+
+function runSeeds(){
+  if(!data.seededIds)data.seededIds=[];
+  let changed=false;
+  SEED.forEach(s=>{
+    if(!data.seededIds.includes(s.seedId)){
+      const p=Object.assign({id:uid()},s.product);
+      room(s.room).products.push(p);
+      data.seededIds.push(s.seedId);
+      changed=true;
+    }
+  });
+  if(changed)save();
+}
+
+function blankRoom(){return {budget:0,notes:'',colors:[],dimensions:'',inspiration:[],products:[]};}
+function load(){
+  try{const d=JSON.parse(localStorage.getItem(KEY));if(d)return d;}catch(e){}
+  const d={rooms:{}};ROOMS.forEach(r=>{if(!r.dashboard)d.rooms[r.id]=blankRoom();});return d;
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(data));return true;}
+  catch(e){
+    alert('Kunne ikke lagre – nettleserens lagringsplass er full.\n\n'+
+      'Tips: bruk «Kopier bildeadresse» og lim inn URL-en i stedet for å laste opp bildet '+
+      '(URL-er tar nesten ingen plass). Du kan også eksportere som backup og fjerne noen '+
+      'store opplastede bilder.');
+    return false;
+  }
+}
+function room(id){if(!data.rooms[id])data.rooms[id]=blankRoom();return data.rooms[id];}
+const uid=()=>Math.random().toString(36).slice(2,9);
+const kr=n=>(Number(n)||0).toLocaleString('no-NO')+' kr';
+
+/* ---------- Nav ---------- */
+function renderNav(){
+  const nav=document.getElementById('nav');nav.innerHTML='';
+  ROOMS.forEach((r,i)=>{
+    if(i===1){const s=document.createElement('div');s.className='nav-sep';nav.appendChild(s);}
+    const b=document.createElement('button');
+    b.className=(current===r.id?'active':'');
+    b.innerHTML=`<span class="ico">${r.ico}</span><span>${r.name}</span>`;
+    b.onclick=()=>{current=r.id;activeTab='inspirasjon';render();};
+    nav.appendChild(b);
+  });
+}
+
+/* ---------- Render ---------- */
+function render(){
+  renderNav();
+  const r=ROOMS.find(x=>x.id===current);
+  document.getElementById('main').innerHTML = r.dashboard ? dashboardHTML() : roomHTML(r);
+}
+
+function dashboardHTML(){
+  let totBudget=0, counts={vurderer:0,onsker:0,bestilt:0,kjopt:0}, totItems=0, kjoptSum=0;
+  ROOMS.filter(r=>!r.dashboard).forEach(r=>{
+    const d=room(r.id);totBudget+=Number(d.budget)||0;
+    d.products.forEach(p=>{totItems++;counts[p.status]=(counts[p.status]||0)+1;
+      if(p.status==='kjopt')kjoptSum+=Number(p.price)||0;});
+  });
+  const rows=ROOMS.filter(r=>!r.dashboard).map(r=>{
+    const d=room(r.id);const tot=d.products.length;
+    const done=d.products.filter(p=>p.status==='kjopt').length;
+    const pct=tot?Math.round(done/tot*100):0;
+    return `<div class="room-row" onclick="goRoom('${r.id}')">
+      <span class="ico">${r.ico}</span>
+      <span class="rname">${r.name}</span>
+      <span class="rmeta">${tot} produkt · ${d.inspiration.length} bilder · ${kr(d.budget)}</span>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+    </div>`;}).join('');
+  return `
+    <div class="page-head"><div><h1>Oversikt</h1>
+      <p class="sub">Velkommen hjem 🌿 Her ser du status for hele huset.</p></div></div>
+    <div class="stats">
+      <div class="stat"><div class="n">${kr(totBudget)}</div><div class="l">Samlet budsjett</div></div>
+      <div class="stat"><div class="n">${kr(kjoptSum)}</div><div class="l">Brukt (kjøpt)</div></div>
+      <div class="stat"><div class="n">${totItems}</div><div class="l">Produkter totalt</div></div>
+      <div class="stat"><div class="n">${counts.kjopt}</div><div class="l">Kjøpt · ${counts.bestilt} bestilt</div></div>
+    </div>
+    <h2 style="font-size:18px;margin:0 0 14px">Rommene</h2>
+    <div class="room-rows">${rows}</div>`;
+}
+function goRoom(id){current=id;activeTab='inspirasjon';render();}
+
+function roomHTML(r){
+  const d=room(r.id);
+  const tabs=['inspirasjon','produkter','farger','mål','notater'];
+  const tabLabels={inspirasjon:'Inspirasjon',produkter:`Produkter (${d.products.length})`,
+    farger:'Fargepalett','mål':'Mål',notater:'Notater'};
+  const tabsHTML=tabs.map(t=>`<button class="${activeTab===t?'active':''}" onclick="setTab('${t}')">${tabLabels[t]}</button>`).join('');
+  let body='';
+  if(activeTab==='inspirasjon')body=inspirasjonHTML(r.id,d);
+  else if(activeTab==='produkter')body=produkterHTML(r.id,d);
+  else if(activeTab==='farger')body=fargerHTML(r.id,d);
+  else if(activeTab==='mål')body=malHTML(r.id,d);
+  else body=notaterHTML(r.id,d);
+  const spent=d.products.filter(p=>p.status==='kjopt').reduce((s,p)=>s+(Number(p.price)||0),0);
+  return `
+    <div class="page-head">
+      <div><h1>${r.ico} ${r.name}</h1>
+        <p class="sub">Budsjett ${kr(d.budget)} · brukt ${kr(spent)}</p></div>
+    </div>
+    <div class="tabs">${tabsHTML}</div>
+    ${body}`;
+}
+function setTab(t){activeTab=t;render();}
+
+function inspirasjonHTML(id,d){
+  const cards=d.inspiration.map(it=>`
+    <div class="card">
+      <img src="${it.img}" onclick="zoom('${it.id}','insp','${id}')" alt="">
+      <div class="card-body">
+        ${it.caption?`<div class="card-cap">${esc(it.caption)}</div>`:''}
+        <div class="card-foot"><span></span>
+          <button class="del" onclick="delInsp('${id}','${it.id}')">Slett</button></div>
+      </div>
+    </div>`).join('');
+  return `<p class="sub" style="margin-bottom:18px">Inspirasjonsbilder, moodboard og AI-bilder du lager underveis.</p>
+    <div class="masonry">
+      <div class="add-tile" onclick="openInsp('${id}')"><span class="plus">+</span>Legg til bilde</div>
+      ${cards}
+    </div>`;
+}
+function produkterHTML(id,d){
+  const cards=d.products.map(p=>{
+    const st=STATUS[p.status]||STATUS.vurderer;
+    return `<div class="card">
+      ${p.img?`<img src="${p.img}" onclick="zoom('${p.id}','prod','${id}')" alt="">`:''}
+      <div class="card-body">
+        <div class="card-title">${esc(p.name)}</div>
+        ${p.price?`<div class="card-price">${kr(p.price)}</div>`:''}
+        ${p.note?`<div class="card-cap">${esc(p.note)}</div>`:''}
+        ${getLinks(p).length?`<div class="buy-links">${getLinks(p).map(l=>
+          `<a class="buy-btn" href="${l}" target="_blank" rel="noopener">🛒 <span>${esc(linkLabel(l))}</span></a>`).join('')}</div>`:''}
+        <div class="card-foot">
+          <span class="badge ${st.cls}">${st.label}</span>
+          <span>
+            <button class="del" onclick="editProd('${id}','${p.id}')">Endre</button>
+            <button class="del" onclick="delProd('${id}','${p.id}')">Slett</button>
+          </span>
+        </div>
+      </div>
+    </div>`;}).join('');
+  return `<p class="sub" style="margin-bottom:18px">Produkter du vurderer å kjøpe – med bilde, pris, lenke og status.</p>
+    <div class="masonry">
+      <div class="add-tile" onclick="openProd('${id}')"><span class="plus">+</span>Legg til produkt</div>
+      ${cards}
+    </div>`;
+}
+function fargerHTML(id,d){
+  const sw=d.colors.map((c,i)=>`<div class="swatch" style="background:${c}">
+    <span class="x" onclick="delColor('${id}',${i})">×</span></div>`).join('');
+  return `<div class="panel-box">
+    <label class="fl">Fargepalett for rommet</label>
+    <div class="swatches">${sw}
+      <input type="color" id="colorPick_${id}" style="display:none" onchange="addColor('${id}',this.value)">
+      <button class="swatch-add" onclick="document.getElementById('colorPick_${id}').click()">+</button>
+    </div>
+    <p class="sub" style="margin-top:14px">Klikk + for å plukke en farge. Bygg en rød tråd for rommet.</p>
+  </div>`;
+}
+function malHTML(id,d){
+  return `<div class="panel-box">
+    <div class="field">
+      <label class="fl">Mål og dimensjoner</label>
+      <textarea oninput="setField('${id}','dimensions',this.value)" placeholder="F.eks.&#10;Rom: 3,4 m × 4,1 m, takhøyde 2,5 m&#10;Vindusvegg: 2,2 m&#10;Sofa maks: 240 cm&#10;Seng: 160×200">${esc(d.dimensions)}</textarea>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label class="fl">Budsjett for rommet (kr)</label>
+      <input type="number" value="${d.budget||''}" oninput="setField('${id}','budget',this.value)" placeholder="0">
+    </div>
+  </div>`;
+}
+function notaterHTML(id,d){
+  return `<div class="panel-box">
+    <label class="fl">Notater</label>
+    <textarea oninput="setField('${id}','notes',this.value)" placeholder="Tanker, ideer, ting å huske på, prioriteringer (må ha / fint å ha)...">${esc(d.notes)}</textarea>
+  </div>`;
+}
+
+/* ---------- Field edits ---------- */
+function setField(id,f,v){room(id)[f]=v;save();if(f==='budget')renderNav();}
+function addColor(id,c){room(id).colors.push(c);save();render();}
+function delColor(id,i){room(id).colors.splice(i,1);save();render();}
+
+/* ---------- Inspiration ---------- */
+let inspImg='', activeImgType='insp';
+function openInsp(id){
+  inspImg='';activeImgType='insp';
+  modalShow(`<h3>Legg til inspirasjonsbilde</h3>
+    <div class="field"><label class="fl">Bilde <span style="font-weight:400">– last opp, lim inn (Cmd+V) eller dra bildet hit</span></label>
+      <div class="img-pick">
+        <label>📁 Last opp<input type="file" accept="image/*" hidden onchange="fileToPreview(event)"></label>
+        <label>🔗 Lim inn bilde-URL<input type="url" hidden id="urlHidden"></label>
+      </div>
+      <input type="url" id="inspUrl" placeholder="https://... (lim inn bildelenke)" style="margin-top:8px"
+        oninput="urlToPreview(this.value)">
+      <img class="preview" id="preview">
+    </div>
+    <div class="field"><label class="fl">Bildetekst (valgfritt)</label>
+      <input type="text" id="inspCap" placeholder="F.eks. Lys eik, naturlige toner"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="modalHide()">Avbryt</button>
+      <button class="btn btn-primary" onclick="saveInsp('${id}')">Lagre</button>
+    </div>`);
+}
+function saveInsp(id){
+  if(!inspImg){alert('Velg eller lim inn et bilde først.');return;}
+  room(id).inspiration.push({id:uid(),img:inspImg,caption:document.getElementById('inspCap').value.trim()});
+  if(!save()){room(id).inspiration.pop();return;}
+  modalHide();render();
+}
+function delInsp(id,iid){if(confirm('Slette dette bildet?')){room(id).inspiration=room(id).inspiration.filter(x=>x.id!==iid);save();render();}}
+
+/* ---------- Products ---------- */
+let prodImg='', editingProd=null;
+function openProd(id,existing){
+  prodImg=existing?existing.img:''; editingProd=existing||null; activeImgType='prod';
+  const p=existing||{name:'',price:'',link:'',note:'',status:'vurderer'};
+  modalShow(`<h3>${existing?'Endre produkt':'Legg til produkt'}</h3>
+    <div class="field"><label class="fl">Navn</label>
+      <input type="text" id="pName" value="${escAttr(p.name)}" placeholder="F.eks. Stocksund sofa"></div>
+    <div class="field"><label class="fl">Pris (kr)</label>
+      <input type="number" id="pPrice" value="${p.price||''}" placeholder="0"></div>
+    <div class="field"><label class="fl">Kjøpelenker – lim inn URL til det du vil kjøpe</label>
+      <div id="linkList"></div>
+      <button type="button" class="add-link" onclick="addLinkRow()">+ Legg til lenke</button></div>
+    <div class="field"><label class="fl">Status</label>
+      <select id="pStatus">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${p.status===k?'selected':''}>${v.label}</option>`).join('')}</select></div>
+    <div class="field"><label class="fl">Notat (valgfritt)</label>
+      <input type="text" id="pNote" value="${escAttr(p.note)}" placeholder="F.eks. fås i 3 farger"></div>
+    <div class="field"><label class="fl">Bilde <span style="font-weight:400">– last opp, lim inn (Cmd+V) eller dra bildet hit</span></label>
+      <div class="img-pick">
+        <label>📁 Last opp<input type="file" accept="image/*" hidden onchange="fileToPreview(event,'prod')"></label>
+      </div>
+      <input type="url" id="prodUrl" placeholder="eller lim inn bilde-URL" style="margin-top:8px"
+        oninput="urlToPreview(this.value,'prod')">
+      <img class="preview" id="preview" ${prodImg?`src="${prodImg}" style="display:block"`:''}>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="modalHide()">Avbryt</button>
+      <button class="btn btn-primary" onclick="saveProd('${id}')">Lagre</button>
+    </div>`);
+  const existLinks=getLinks(p);
+  if(existLinks.length)existLinks.forEach(l=>addLinkRow(l));else addLinkRow();
+}
+function getLinks(p){
+  let a=Array.isArray(p.links)?p.links.slice():[];
+  if(p.link&&!a.includes(p.link))a.unshift(p.link);
+  return a.filter(Boolean);
+}
+function linkLabel(url){try{return new URL(url).hostname.replace(/^www\./,'');}catch(e){return 'Se produkt';}}
+function addLinkRow(url){
+  const list=document.getElementById('linkList');if(!list)return;
+  const row=document.createElement('div');row.className='link-row';
+  const inp=document.createElement('input');inp.type='url';inp.className='linkInput';
+  inp.placeholder='https://...';inp.value=url||'';
+  const rm=document.createElement('button');rm.type='button';rm.className='del';rm.textContent='✕';
+  rm.title='Fjern lenke';rm.onclick=()=>row.remove();
+  row.appendChild(inp);row.appendChild(rm);list.appendChild(row);
+}
+function editProd(id,pid){const p=room(id).products.find(x=>x.id===pid);if(p)openProd(id,p);}
+function saveProd(id){
+  const name=document.getElementById('pName').value.trim();
+  if(!name){alert('Gi produktet et navn.');return;}
+  const links=[...document.querySelectorAll('#linkList .linkInput')]
+    .map(i=>i.value.trim()).filter(Boolean);
+  const obj={name,
+    price:document.getElementById('pPrice').value,
+    link:'',
+    links:links,
+    status:document.getElementById('pStatus').value,
+    note:document.getElementById('pNote').value.trim(),
+    img:prodImg};
+  if(editingProd){
+    const backup=Object.assign({},editingProd);
+    Object.assign(editingProd,obj);
+    if(!save()){Object.assign(editingProd,backup);return;}
+  }else{
+    obj.id=uid();room(id).products.push(obj);
+    if(!save()){room(id).products.pop();return;}
+  }
+  modalHide();render();
+}
+function delProd(id,pid){if(confirm('Slette dette produktet?')){room(id).products=room(id).products.filter(x=>x.id!==pid);save();render();}}
+
+/* ---------- Image helpers ---------- */
+function fileToPreview(e,type){
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>compressImage(ev.target.result,d=>setImg(d,type));
+  reader.readAsDataURL(f);
+}
+function urlToPreview(url,type){if(url.trim())setImg(url.trim(),type);}
+/* Skalerer ned + komprimerer opplastede/limte bilder så de ikke sprenger lagringen */
+function compressImage(src,cb){
+  const img=new Image();
+  img.onload=()=>{
+    const max=1400;let w=img.width,h=img.height;
+    if(w>max||h>max){const s=Math.min(max/w,max/h);w=Math.round(w*s);h=Math.round(h*s);}
+    try{
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      cb(c.toDataURL('image/jpeg',0.82));
+    }catch(e){cb(src);}
+  };
+  img.onerror=()=>cb(src);
+  img.src=src;
+}
+function setImg(src,type){
+  if(type==='prod')prodImg=src;else inspImg=src;
+  const pv=document.getElementById('preview');
+  if(pv){pv.src=src;pv.style.display='block';}
+}
+
+/* ---------- Lightbox ---------- */
+function zoom(itemId,type,roomId){
+  const d=room(roomId);
+  const list=type==='insp'?d.inspiration:d.products;
+  const it=list.find(x=>x.id===itemId);
+  if(it&&it.img){document.getElementById('lightboxImg').src=it.img;
+    document.getElementById('lightbox').classList.add('show');}
+}
+
+/* ---------- Modal ---------- */
+function modalShow(html){
+  const inner=document.getElementById('modalInner');
+  inner.innerHTML=html;
+  document.getElementById('modal').classList.add('show');
+  inner.ondragover=e=>{e.preventDefault();inner.style.outline='2px dashed var(--accent)';};
+  inner.ondragleave=()=>{inner.style.outline='';};
+  inner.ondrop=e=>{
+    e.preventDefault();inner.style.outline='';
+    const f=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(f&&f.type.indexOf('image')===0){fileToImg(f);return;}
+    const url=e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain');
+    if(url)setImg(url.trim(),activeImgType);
+  };
+}
+function modalHide(){document.getElementById('modal').classList.remove('show');}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')modalHide();});
+/* Paste an image (Cmd/Ctrl+V) while a modal is open */
+document.addEventListener('paste',e=>{
+  if(!document.getElementById('modal').classList.contains('show'))return;
+  const items=e.clipboardData&&e.clipboardData.items;if(!items)return;
+  for(const it of items){
+    if(it.type.indexOf('image')===0){const f=it.getAsFile();if(f){fileToImg(f);e.preventDefault();return;}}
+  }
+});
+function fileToImg(f){const r=new FileReader();r.onload=ev=>compressImage(ev.target.result,d=>setImg(d,activeImgType));r.readAsDataURL(f);}
+
+/* ---------- Export / Import ---------- */
+function exportData(){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='foldviksskogen-innredning.json';a.click();
+}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{try{const d=JSON.parse(ev.target.result);
+    if(d.rooms){data=d;save();render();alert('Importert! ✔');}
+    else alert('Ugyldig fil.');}catch(err){alert('Kunne ikke lese filen.');}};
+  reader.readAsText(f);e.target.value='';
+}
+
+/* ---------- Utils ---------- */
+function esc(s){return(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function escAttr(s){return(s||'').replace(/"/g,'&quot;');}
+
+runSeeds();
+render();
+</script>
+</body>
+</html>
