@@ -138,6 +138,16 @@
     justify-content:center;z-index:60;padding:30px;cursor:zoom-out}
   .lightbox.show{display:flex}
   .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  /* Kode-skjerm (gate) */
+  .gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+  .gate-box{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:36px 34px;
+    box-shadow:var(--shadow);text-align:center;max-width:340px;width:100%}
+  .gate-box h2{margin:0 0 4px;font-size:24px}
+  .gate-box p{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .gate-box input{margin-bottom:12px;text-align:center;font-size:16px}
+  .gate-box .btn{width:100%}
+  .sync-tag{font-size:11px;color:var(--accent-dark);background:var(--soft);border:1px solid var(--line);
+    border-radius:20px;padding:3px 10px;margin:8px 8px 0;display:inline-block}
   @media(max-width:760px){
     body{flex-direction:column}
     .sidebar{width:100%;height:auto;position:relative;border-right:none;border-bottom:1px solid var(--line)}
@@ -146,6 +156,8 @@
     .nav button{width:auto}
   }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -193,56 +205,101 @@ const STATUS = {
   kjopt:   {label:'Kjøpt',    cls:'b-kjopt'},
 };
 
-/* ---------- Seeds (auto-added once) ---------- */
-const SEED = [
-  {seedId:'barnerom-tipi', room:'barnerom', product:{
-    name:'Tipi-telt / lekekrok',
-    price:'',
-    link:'',
-    status:'onsker',
-    note:'Koselig lesekrok med lyslenke, puter og saueskinn',
-    img:'Barnerom/Tipi.jpg'
-  }},
-];
+/* ---------- Firebase (delt lagring) ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyCVVzS8Fi2QpK4a88G1WGl_Mek8WvHpERI",
+  authDomain: "foldvikskogen-9689b.firebaseapp.com",
+  projectId: "foldvikskogen-9689b",
+  storageBucket: "foldvikskogen-9689b.firebasestorage.app",
+  messagingSenderId: "430571737050",
+  appId: "1:430571737050:web:525100b9334b73541bfae3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const PASSCODE = 'foldvik';           // felles kode dere taster inn
+const KEY = 'foldviksskogen_v1';      // gammel lokal lagring – kun for engangs-migrering
 
 /* ---------- State ---------- */
-const KEY='foldviksskogen_v1';
-let data = load();
+let data = {rooms:{}};
 let current = 'oversikt';
 let activeTab = 'inspirasjon';
-
-function runSeeds(){
-  if(!data.seededIds)data.seededIds=[];
-  let changed=false;
-  SEED.forEach(s=>{
-    if(!data.seededIds.includes(s.seedId)){
-      const p=Object.assign({id:uid()},s.product);
-      room(s.room).products.push(p);
-      data.seededIds.push(s.seedId);
-      changed=true;
-    }
-  });
-  if(changed)save();
-}
+let pendingRender=false, itemsLoaded=false, metaLoaded=false, migrationChecked=false;
 
 function blankRoom(){return {budget:0,notes:'',colors:[],dimensions:'',inspiration:[],products:[]};}
-function load(){
-  try{const d=JSON.parse(localStorage.getItem(KEY));if(d)return d;}catch(e){}
-  const d={rooms:{}};ROOMS.forEach(r=>{if(!r.dashboard)d.rooms[r.id]=blankRoom();});return d;
-}
-function save(){
-  try{localStorage.setItem(KEY,JSON.stringify(data));return true;}
-  catch(e){
-    alert('Kunne ikke lagre – nettleserens lagringsplass er full.\n\n'+
-      'Tips: bruk «Kopier bildeadresse» og lim inn URL-en i stedet for å laste opp bildet '+
-      '(URL-er tar nesten ingen plass). Du kan også eksportere som backup og fjerne noen '+
-      'store opplastede bilder.');
-    return false;
-  }
-}
 function room(id){if(!data.rooms[id])data.rooms[id]=blankRoom();return data.rooms[id];}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const kr=n=>(Number(n)||0).toLocaleString('no-NO')+' kr';
+ROOMS.forEach(r=>{if(!r.dashboard)data.rooms[r.id]=blankRoom();});
+
+/* ---------- Live-synk med Firestore ---------- */
+function startSync(){
+  db.collection('items').onSnapshot(snap=>{
+    ROOMS.forEach(r=>{if(!r.dashboard){room(r.id).products=[];room(r.id).inspiration=[];}});
+    const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+    docs.sort((a,b)=>(a.created||0)-(b.created||0));
+    docs.forEach(it=>{if(!it.room)return;const r=room(it.room);
+      if(it.kind==='inspiration')r.inspiration.push(it);else r.products.push(it);});
+    itemsLoaded=true;renderFromSync();maybeMigrate();
+  }, fatal);
+  db.collection('meta').onSnapshot(snap=>{
+    snap.docs.forEach(d=>{const r=room(d.id),m=d.data();
+      ['budget','notes','colors','dimensions'].forEach(f=>{if(m[f]!==undefined)r[f]=m[f];});});
+    metaLoaded=true;renderFromSync();renderNav();maybeMigrate();
+  }, fatal);
+}
+function fatal(err){
+  document.getElementById('main').innerHTML='<div class="panel-box">⚠️ <b>Får ikke kontakt med databasen.</b><br><br>'+
+    'Sjekk at Firestore-databasen er skrudd på i Firebase-prosjektet.<br><br>'+
+    '<span style="color:var(--muted);font-size:13px">Teknisk melding: '+esc(err.message||String(err))+'</span></div>';
+}
+/* Ikke tegn på nytt midt i at noen skriver i et felt (unngå å miste teksten) */
+function renderFromSync(){
+  const ae=document.activeElement;
+  if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')&&document.getElementById('main').contains(ae)){pendingRender=true;return;}
+  render();
+}
+document.addEventListener('blur',e=>{
+  if(pendingRender&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')){pendingRender=false;render();}
+},true);
+
+/* ---------- Engangs-migrering av gamle lokale data ---------- */
+function maybeMigrate(){
+  if(migrationChecked||!itemsLoaded||!metaLoaded)return;
+  migrationChecked=true;
+  const cloudEmpty=!ROOMS.some(r=>!r.dashboard&&(room(r.id).products.length||room(r.id).inspiration.length));
+  let local=null;try{local=JSON.parse(localStorage.getItem(KEY));}catch(e){}
+  const hasLocal=local&&local.rooms&&Object.values(local.rooms).some(r=>(r.products&&r.products.length)||(r.inspiration&&r.inspiration.length));
+  if(cloudEmpty&&hasLocal&&confirm('Vi fant innredningsdata lagret lokalt på denne maskinen. Vil du laste den opp til den delte skyen, så Amund også ser den?')){
+    uploadData(local);
+  }
+}
+function uploadData(d){
+  Object.entries(d.rooms||{}).forEach(([rid,r])=>{
+    db.collection('meta').doc(rid).set({budget:r.budget||0,notes:r.notes||'',colors:r.colors||[],dimensions:r.dimensions||''},{merge:true});
+    (r.products||[]).forEach(p=>{const o=Object.assign({},p);delete o.id;o.room=rid;o.kind='product';o.created=o.created||Date.now();db.collection('items').add(o);});
+    (r.inspiration||[]).forEach(it=>{const o=Object.assign({},it);delete o.id;o.room=rid;o.kind='inspiration';o.created=o.created||Date.now();db.collection('items').add(o);});
+  });
+  alert('Lastet opp! Dataene er nå delt med Amund. ✔');
+}
+
+/* ---------- Kode-skjerm (gate) ---------- */
+function showGate(){
+  const g=document.createElement('div');g.className='gate';
+  g.innerHTML=`<div class="gate-box"><h2>Foldviksskogen</h2><p>Skriv inn felles kode</p>
+    <input type="password" id="gateInput" placeholder="Kode">
+    <button class="btn btn-primary" id="gateBtn">Åpne</button>
+    <div id="gateErr" style="color:#c98b8b;font-size:13px;height:16px;margin-top:8px"></div></div>`;
+  document.body.appendChild(g);
+  const tryOpen=()=>{
+    if(document.getElementById('gateInput').value.trim().toLowerCase()===PASSCODE){
+      localStorage.setItem('fv_auth','1');g.remove();startApp();
+    }else{document.getElementById('gateErr').textContent='Feil kode – prøv igjen.';}
+  };
+  document.getElementById('gateBtn').onclick=tryOpen;
+  document.getElementById('gateInput').addEventListener('keydown',e=>{if(e.key==='Enter')tryOpen();});
+  document.getElementById('gateInput').focus();
+}
+function startApp(){render();startSync();}
 
 /* ---------- Nav ---------- */
 function renderNav(){
@@ -392,9 +449,14 @@ function notaterHTML(id,d){
 }
 
 /* ---------- Field edits ---------- */
-function setField(id,f,v){room(id)[f]=v;save();if(f==='budget')renderNav();}
-function addColor(id,c){room(id).colors.push(c);save();render();}
-function delColor(id,i){room(id).colors.splice(i,1);save();render();}
+let metaTimers={};
+function setField(id,f,v){
+  const r=room(id);r[f]=v;if(f==='budget')renderNav();
+  clearTimeout(metaTimers[id+f]);
+  metaTimers[id+f]=setTimeout(()=>{db.collection('meta').doc(id).set({[f]:v},{merge:true});},500);
+}
+function addColor(id,c){const r=room(id);r.colors.push(c);db.collection('meta').doc(id).set({colors:r.colors},{merge:true});render();}
+function delColor(id,i){const r=room(id);r.colors.splice(i,1);db.collection('meta').doc(id).set({colors:r.colors},{merge:true});render();}
 
 /* ---------- Inspiration ---------- */
 let inspImg='', activeImgType='insp';
@@ -419,11 +481,12 @@ function openInsp(id){
 }
 function saveInsp(id){
   if(!inspImg){alert('Velg eller lim inn et bilde først.');return;}
-  room(id).inspiration.push({id:uid(),img:inspImg,caption:document.getElementById('inspCap').value.trim()});
-  if(!save()){room(id).inspiration.pop();return;}
-  modalHide();render();
+  db.collection('items').add({room:id,kind:'inspiration',img:inspImg,
+    caption:document.getElementById('inspCap').value.trim(),created:Date.now()})
+    .then(()=>modalHide())
+    .catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
 }
-function delInsp(id,iid){if(confirm('Slette dette bildet?')){room(id).inspiration=room(id).inspiration.filter(x=>x.id!==iid);save();render();}}
+function delInsp(id,iid){if(confirm('Slette dette bildet?'))db.collection('items').doc(iid).delete();}
 
 /* ---------- Products ---------- */
 let prodImg='', editingProd=null;
@@ -478,24 +541,18 @@ function saveProd(id){
   if(!name){alert('Gi produktet et navn.');return;}
   const links=[...document.querySelectorAll('#linkList .linkInput')]
     .map(i=>i.value.trim()).filter(Boolean);
-  const obj={name,
+  const obj={room:id,kind:'product',name,
     price:document.getElementById('pPrice').value,
-    link:'',
     links:links,
     status:document.getElementById('pStatus').value,
     note:document.getElementById('pNote').value.trim(),
     img:prodImg};
-  if(editingProd){
-    const backup=Object.assign({},editingProd);
-    Object.assign(editingProd,obj);
-    if(!save()){Object.assign(editingProd,backup);return;}
-  }else{
-    obj.id=uid();room(id).products.push(obj);
-    if(!save()){room(id).products.pop();return;}
-  }
-  modalHide();render();
+  const p=editingProd
+    ? db.collection('items').doc(editingProd.id).update(obj)
+    : db.collection('items').add(Object.assign({created:Date.now()},obj));
+  p.then(()=>modalHide()).catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
 }
-function delProd(id,pid){if(confirm('Slette dette produktet?')){room(id).products=room(id).products.filter(x=>x.id!==pid);save();render();}}
+function delProd(id,pid){if(confirm('Slette dette produktet?'))db.collection('items').doc(pid).delete();}
 
 /* ---------- Image helpers ---------- */
 function fileToPreview(e,type){
@@ -572,7 +629,7 @@ function importData(e){
   const f=e.target.files[0];if(!f)return;
   const reader=new FileReader();
   reader.onload=ev=>{try{const d=JSON.parse(ev.target.result);
-    if(d.rooms){data=d;save();render();alert('Importert! ✔');}
+    if(d.rooms){if(confirm('Importere og laste opp innholdet fra fila til den delte skyen?'))uploadData(d);}
     else alert('Ugyldig fil.');}catch(err){alert('Kunne ikke lese filen.');}};
   reader.readAsText(f);e.target.value='';
 }
@@ -581,8 +638,9 @@ function importData(e){
 function esc(s){return(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 function escAttr(s){return(s||'').replace(/"/g,'&quot;');}
 
-runSeeds();
-render();
+/* ---------- Oppstart ---------- */
+if(localStorage.getItem('fv_auth')==='1')startApp();
+else showGate();
 </script>
 </body>
 </html>
