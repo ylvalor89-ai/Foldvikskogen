@@ -71,6 +71,17 @@
   .add-link{padding:7px 12px;font-size:13px;border-radius:8px;margin-top:2px;cursor:pointer;
     border:1px solid var(--line);background:var(--soft);color:var(--muted)}
   .add-link:hover{border-color:var(--accent);color:var(--ink)}
+  /* Kommentarer på produktkort */
+  .comments{border-top:1px solid var(--line);margin-top:8px;padding-top:8px;
+    display:flex;flex-direction:column;gap:5px}
+  .comment{font-size:12.5px;line-height:1.45}
+  .comment b{color:var(--accent-dark)}
+  .c-row{display:flex;gap:6px;margin-top:7px}
+  .c-row input{flex:1;padding:7px 10px;font-size:12.5px;border:1px solid var(--line);
+    border-radius:8px;background:var(--soft);min-width:0}
+  .c-row button{border:1px solid var(--line);background:var(--soft);border-radius:8px;
+    cursor:pointer;font-size:13px;padding:0 11px;color:var(--accent-dark)}
+  .c-row button:hover{border-color:var(--accent);background:#fff}
   .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px}
   .badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600}
   .b-vurderer{background:#eef0e9;color:#5f6c57}
@@ -409,6 +420,13 @@ function produkterHTML(id,d){
             <button class="del" onclick="delProd('${id}','${p.id}')">Slett</button>
           </span>
         </div>
+        ${(p.comments&&p.comments.length)?`<div class="comments">${p.comments.map(c=>
+          `<div class="comment"><b>${esc(c.by)}:</b> ${esc(c.text)}</div>`).join('')}</div>`:''}
+        <div class="c-row">
+          <input id="c_${p.id}" placeholder="Skriv en kommentar…" maxlength="500"
+            onkeydown="if(event.key==='Enter')sendComment('${p.id}')">
+          <button onclick="sendComment('${p.id}')" title="Send">➤</button>
+        </div>
       </div>
     </div>`;}).join('');
   return `<p class="sub" style="margin-bottom:18px">Produkter du vurderer å kjøpe – med bilde, pris, lenke og status.</p>
@@ -553,6 +571,25 @@ function saveProd(id){
   p.then(()=>modalHide()).catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
 }
 function delProd(id,pid){if(confirm('Slette dette produktet?'))db.collection('items').doc(pid).delete();}
+
+/* ---------- Kommentarer ---------- */
+function getUserName(){
+  let n=localStorage.getItem('fv_name');
+  if(!n){
+    n=(prompt('Hva heter du? (vises ved kommentarene dine)')||'').trim();
+    if(n)localStorage.setItem('fv_name',n);
+  }
+  return n;
+}
+function sendComment(pid){
+  const inp=document.getElementById('c_'+pid);if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  const by=getUserName();if(!by)return;
+  inp.value='';inp.blur();
+  db.collection('items').doc(pid).update({
+    comments:firebase.firestore.FieldValue.arrayUnion({by,text,at:Date.now()})
+  }).catch(err=>alert('Kunne ikke sende kommentaren: '+(err.message||err)));
+}
 
 /* ---------- Image helpers ---------- */
 function fileToPreview(e,type){
