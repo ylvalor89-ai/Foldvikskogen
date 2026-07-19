@@ -373,15 +373,30 @@ function innkjopHTML(){
       </label>
       <button class="del" onclick="delShopping('${it.id}')">Slett</button>
     </div>`).join('');
+  const bestilte=[];
+  ROOMS.filter(r=>!r.dashboard&&!r.checklist).forEach(r=>{
+    room(r.id).products.filter(p=>p.status==='bestilt').forEach(p=>bestilte.push({room:r,p}));
+  });
+  const bestilteRows=bestilte.map(({room:r,p})=>`
+    <div class="shop-row">
+      <span>${r.ico} <b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:12.5px">– ${esc(r.name)}</span></span>
+      ${p.price?`<span class="card-price">${kr(p.price)}</span>`:''}
+    </div>`).join('');
   return `
     <div class="page-head"><div><h1>🛒 Innkjøp</h1>
       <p class="sub">Ting som må kjøpes inn. Kryss av når det er kjøpt.</p></div></div>
-    <div class="panel-box" style="max-width:520px">
-      <div class="shop-list">${rows||'<div class="empty">Ingen ting på lista ennå.</div>'}</div>
-      <div class="c-row" style="margin-top:14px">
-        <input id="shopNew" placeholder="Legg til noe å kjøpe…" maxlength="200"
-          onkeydown="if(event.key==='Enter')addShopping()">
-        <button onclick="addShopping()" title="Legg til">➤</button>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+      <div class="panel-box" style="flex:1;min-width:280px;max-width:520px">
+        <div class="shop-list">${rows||'<div class="empty">Ingen ting på lista ennå.</div>'}</div>
+        <div class="c-row" style="margin-top:14px">
+          <input id="shopNew" placeholder="Legg til noe å kjøpe…" maxlength="200"
+            onkeydown="if(event.key==='Enter')addShopping()">
+          <button onclick="addShopping()" title="Legg til">➤</button>
+        </div>
+      </div>
+      <div class="panel-box" style="flex:1;min-width:280px;max-width:520px">
+        <label class="fl" style="margin-bottom:10px">Bestilte produkter</label>
+        <div class="shop-list">${bestilteRows||'<div class="empty">Ingen produkter er bestilt ennå.</div>'}</div>
       </div>
     </div>`;
 }
