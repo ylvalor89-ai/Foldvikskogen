@@ -97,6 +97,14 @@
   .add-tile:hover{border-color:var(--accent);color:var(--accent-dark);background:#fff}
   .add-tile .plus{font-size:34px;font-weight:300;line-height:1}
   .empty{color:var(--muted);font-size:14px;padding:30px 0;text-align:center}
+  /* Innkjøpsliste */
+  .shop-list{display:flex;flex-direction:column;gap:2px}
+  .shop-row{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 4px;border-bottom:1px solid var(--line)}
+  .shop-row:last-child{border-bottom:none}
+  .shop-check{display:flex;align-items:center;gap:10px;font-size:14.5px;cursor:pointer}
+  .shop-check input{width:auto;accent-color:var(--accent)}
+  .shop-row.done .shop-check span{text-decoration:line-through;color:var(--muted)}
   /* Notes / palette / dims */
   .panel-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     padding:22px;box-shadow:var(--shadow)}
@@ -197,6 +205,7 @@
 <script>
 /* ---------- Rooms ---------- */
 const ROOMS = [
+  {id:'innkjop',    name:'Innkjøp',          ico:'🛒', checklist:true},
   {id:'oversikt',   name:'Oversikt',         ico:'🏠', dashboard:true},
   {id:'barnerom',   name:'Barnerom',         ico:'🧸'},
   {id:'kontor',     name:'Kontor / lager',   ico:'💼'},
@@ -231,26 +240,31 @@ const PASSCODE = 'foldvik';           // felles kode dere taster inn
 const KEY = 'foldviksskogen_v1';      // gammel lokal lagring – kun for engangs-migrering
 
 /* ---------- State ---------- */
-let data = {rooms:{}};
+let data = {rooms:{}, shopping:[]};
 let current = 'oversikt';
 let activeTab = 'inspirasjon';
-let pendingRender=false, itemsLoaded=false, metaLoaded=false, migrationChecked=false;
+let pendingRender=false, itemsLoaded=false, metaLoaded=false, migrationChecked=false, shoppingSeedChecked=false;
 
-function blankRoom(){return {budget:0,notes:'',colors:[],dimensions:'',inspiration:[],products:[]};}
+function blankRoom(){return {budget:0,notes:'',colors:[],dimensions:'',inspiration:[],originals:[],products:[]};}
 function room(id){if(!data.rooms[id])data.rooms[id]=blankRoom();return data.rooms[id];}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const kr=n=>(Number(n)||0).toLocaleString('no-NO')+' kr';
-ROOMS.forEach(r=>{if(!r.dashboard)data.rooms[r.id]=blankRoom();});
+ROOMS.forEach(r=>{if(!r.dashboard&&!r.checklist)data.rooms[r.id]=blankRoom();});
 
 /* ---------- Live-synk med Firestore ---------- */
 function startSync(){
   db.collection('items').onSnapshot(snap=>{
-    ROOMS.forEach(r=>{if(!r.dashboard){room(r.id).products=[];room(r.id).inspiration=[];}});
+    ROOMS.forEach(r=>{if(!r.dashboard&&!r.checklist){room(r.id).products=[];room(r.id).inspiration=[];room(r.id).originals=[];}});
+    data.shopping=[];
     const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
     docs.sort((a,b)=>(a.created||0)-(b.created||0));
-    docs.forEach(it=>{if(!it.room)return;const r=room(it.room);
-      if(it.kind==='inspiration')r.inspiration.push(it);else r.products.push(it);});
-    itemsLoaded=true;renderFromSync();maybeMigrate();
+    docs.forEach(it=>{
+      if(it.kind==='shopping'){data.shopping.push(it);return;}
+      if(!it.room)return;const r=room(it.room);
+      if(it.kind==='inspiration')r.inspiration.push(it);
+      else if(it.kind==='original')r.originals.push(it);
+      else r.products.push(it);});
+    itemsLoaded=true;renderFromSync();maybeMigrate();maybeSeedShopping();
   }, fatal);
   db.collection('meta').onSnapshot(snap=>{
     snap.docs.forEach(d=>{const r=room(d.id),m=d.data();
@@ -277,7 +291,7 @@ document.addEventListener('blur',e=>{
 function maybeMigrate(){
   if(migrationChecked||!itemsLoaded||!metaLoaded)return;
   migrationChecked=true;
-  const cloudEmpty=!ROOMS.some(r=>!r.dashboard&&(room(r.id).products.length||room(r.id).inspiration.length));
+  const cloudEmpty=!ROOMS.some(r=>!r.dashboard&&!r.checklist&&(room(r.id).products.length||room(r.id).inspiration.length));
   let local=null;try{local=JSON.parse(localStorage.getItem(KEY));}catch(e){}
   const hasLocal=local&&local.rooms&&Object.values(local.rooms).some(r=>(r.products&&r.products.length)||(r.inspiration&&r.inspiration.length));
   if(cloudEmpty&&hasLocal&&confirm('Vi fant innredningsdata lagret lokalt på denne maskinen. Vil du laste den opp til den delte skyen, så Amund også ser den?')){
@@ -291,6 +305,21 @@ function uploadData(d){
     (r.inspiration||[]).forEach(it=>{const o=Object.assign({},it);delete o.id;o.room=rid;o.kind='inspiration';o.created=o.created||Date.now();db.collection('items').add(o);});
   });
   alert('Lastet opp! Dataene er nå delt med Amund. ✔');
+}
+
+/* ---------- Engangs-oppsett av standard innkjøpsliste ---------- */
+function maybeSeedShopping(){
+  if(shoppingSeedChecked||!itemsLoaded)return;
+  shoppingSeedChecked=true;
+  if(data.shopping.length)return;
+  db.collection('meta').doc('_shoppingSeed').get().then(doc=>{
+    if(doc.exists)return;
+    const defaults=['Barneseng','Seng til Amund','Servantskap','Badekar','Oppbevaringsskap bad'];
+    defaults.forEach((text,i)=>{
+      db.collection('items').add({kind:'shopping',text,done:false,created:Date.now()+i});
+    });
+    db.collection('meta').doc('_shoppingSeed').set({seeded:true});
+  });
 }
 
 /* ---------- Kode-skjerm (gate) ---------- */
@@ -316,7 +345,9 @@ function startApp(){render();startSync();}
 function renderNav(){
   const nav=document.getElementById('nav');nav.innerHTML='';
   ROOMS.forEach((r,i)=>{
-    if(i===1){const s=document.createElement('div');s.className='nav-sep';nav.appendChild(s);}
+    if(i>0&&!r.dashboard&&!r.checklist&&(ROOMS[i-1].dashboard||ROOMS[i-1].checklist)){
+      const s=document.createElement('div');s.className='nav-sep';nav.appendChild(s);
+    }
     const b=document.createElement('button');
     b.className=(current===r.id?'active':'');
     b.innerHTML=`<span class="ico">${r.ico}</span><span>${r.name}</span>`;
@@ -329,17 +360,51 @@ function renderNav(){
 function render(){
   renderNav();
   const r=ROOMS.find(x=>x.id===current);
-  document.getElementById('main').innerHTML = r.dashboard ? dashboardHTML() : roomHTML(r);
+  document.getElementById('main').innerHTML = r.dashboard ? dashboardHTML() : r.checklist ? innkjopHTML() : roomHTML(r);
 }
+
+function innkjopHTML(){
+  const items=data.shopping.slice().sort((a,b)=>(a.created||0)-(b.created||0));
+  const rows=items.map(it=>`
+    <div class="shop-row ${it.done?'done':''}">
+      <label class="shop-check">
+        <input type="checkbox" ${it.done?'checked':''} onchange="toggleShopping('${it.id}',this.checked)">
+        <span>${esc(it.text)}</span>
+      </label>
+      <button class="del" onclick="delShopping('${it.id}')">Slett</button>
+    </div>`).join('');
+  return `
+    <div class="page-head"><div><h1>🛒 Innkjøp</h1>
+      <p class="sub">Ting som må kjøpes inn. Kryss av når det er kjøpt.</p></div></div>
+    <div class="panel-box" style="max-width:520px">
+      <div class="shop-list">${rows||'<div class="empty">Ingen ting på lista ennå.</div>'}</div>
+      <div class="c-row" style="margin-top:14px">
+        <input id="shopNew" placeholder="Legg til noe å kjøpe…" maxlength="200"
+          onkeydown="if(event.key==='Enter')addShopping()">
+        <button onclick="addShopping()" title="Legg til">➤</button>
+      </div>
+    </div>`;
+}
+function addShopping(){
+  const inp=document.getElementById('shopNew');if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  inp.value='';
+  db.collection('items').add({kind:'shopping',text,done:false,created:Date.now()})
+    .catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
+}
+function toggleShopping(iid,done){
+  db.collection('items').doc(iid).update({done}).catch(err=>alert('Kunne ikke oppdatere: '+(err.message||err)));
+}
+function delShopping(iid){if(confirm('Slette denne varen fra lista?'))db.collection('items').doc(iid).delete();}
 
 function dashboardHTML(){
   let totBudget=0, counts={vurderer:0,onsker:0,bestilt:0,kjopt:0}, totItems=0, kjoptSum=0;
-  ROOMS.filter(r=>!r.dashboard).forEach(r=>{
+  ROOMS.filter(r=>!r.dashboard&&!r.checklist).forEach(r=>{
     const d=room(r.id);totBudget+=Number(d.budget)||0;
     d.products.forEach(p=>{totItems++;counts[p.status]=(counts[p.status]||0)+1;
       if(p.status==='kjopt')kjoptSum+=Number(p.price)||0;});
   });
-  const rows=ROOMS.filter(r=>!r.dashboard).map(r=>{
+  const rows=ROOMS.filter(r=>!r.dashboard&&!r.checklist).map(r=>{
     const d=room(r.id);const tot=d.products.length;
     const done=d.products.filter(p=>p.status==='kjopt').length;
     const pct=tot?Math.round(done/tot*100):0;
@@ -365,12 +430,13 @@ function goRoom(id){current=id;activeTab='inspirasjon';render();}
 
 function roomHTML(r){
   const d=room(r.id);
-  const tabs=['inspirasjon','produkter','farger','mål','notater'];
-  const tabLabels={inspirasjon:'Inspirasjon',produkter:`Produkter (${d.products.length})`,
+  const tabs=['inspirasjon','originalbilder','produkter','farger','mål','notater'];
+  const tabLabels={inspirasjon:'Inspirasjon',originalbilder:'Originalbilder',produkter:`Produkter (${d.products.length})`,
     farger:'Fargepalett','mål':'Mål',notater:'Notater'};
   const tabsHTML=tabs.map(t=>`<button class="${activeTab===t?'active':''}" onclick="setTab('${t}')">${tabLabels[t]}</button>`).join('');
   let body='';
   if(activeTab==='inspirasjon')body=inspirasjonHTML(r.id,d);
+  else if(activeTab==='originalbilder')body=originalbilderHTML(r.id,d);
   else if(activeTab==='produkter')body=produkterHTML(r.id,d);
   else if(activeTab==='farger')body=fargerHTML(r.id,d);
   else if(activeTab==='mål')body=malHTML(r.id,d);
@@ -394,11 +460,34 @@ function inspirasjonHTML(id,d){
         ${it.caption?`<div class="card-cap">${esc(it.caption)}</div>`:''}
         <div class="card-foot"><span></span>
           <button class="del" onclick="delInsp('${id}','${it.id}')">Slett</button></div>
+        ${(it.comments&&it.comments.length)?`<div class="comments">${it.comments.map(c=>
+          `<div class="comment"><b>${esc(c.by)}:</b> ${esc(c.text)}</div>`).join('')}</div>`:''}
+        <div class="c-row">
+          <input id="c_${it.id}" placeholder="Skriv en kommentar…" maxlength="500"
+            onkeydown="if(event.key==='Enter')sendComment('${it.id}')">
+          <button onclick="sendComment('${it.id}')" title="Send">➤</button>
+        </div>
       </div>
     </div>`).join('');
   return `<p class="sub" style="margin-bottom:18px">Inspirasjonsbilder, moodboard og AI-bilder du lager underveis.</p>
     <div class="masonry">
       <div class="add-tile" onclick="openInsp('${id}')"><span class="plus">+</span>Legg til bilde</div>
+      ${cards}
+    </div>`;
+}
+function originalbilderHTML(id,d){
+  const cards=(d.originals||[]).map(it=>`
+    <div class="card">
+      <img src="${it.img}" onclick="zoom('${it.id}','orig','${id}')" alt="">
+      <div class="card-body">
+        ${it.caption?`<div class="card-cap">${esc(it.caption)}</div>`:''}
+        <div class="card-foot"><span></span>
+          <button class="del" onclick="delOrig('${id}','${it.id}')">Slett</button></div>
+      </div>
+    </div>`).join('');
+  return `<p class="sub" style="margin-bottom:18px">Bilder av rommet slik det er nå, før dere gjør noe med det.</p>
+    <div class="masonry">
+      <div class="add-tile" onclick="openOrig('${id}')"><span class="plus">+</span>Legg til bilde</div>
       ${cards}
     </div>`;
 }
@@ -505,6 +594,35 @@ function saveInsp(id){
     .catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
 }
 function delInsp(id,iid){if(confirm('Slette dette bildet?'))db.collection('items').doc(iid).delete();}
+
+/* ---------- Originalbilder ---------- */
+let origImg='';
+function openOrig(id){
+  origImg='';activeImgType='orig';
+  modalShow(`<h3>Legg til originalbilde</h3>
+    <div class="field"><label class="fl">Bilde <span style="font-weight:400">– last opp, lim inn (Cmd+V) eller dra bildet hit</span></label>
+      <div class="img-pick">
+        <label>📁 Last opp<input type="file" accept="image/*" hidden onchange="fileToPreview(event,'orig')"></label>
+      </div>
+      <input type="url" id="origUrl" placeholder="https://... (lim inn bildelenke)" style="margin-top:8px"
+        oninput="urlToPreview(this.value,'orig')">
+      <img class="preview" id="preview">
+    </div>
+    <div class="field"><label class="fl">Bildetekst (valgfritt)</label>
+      <input type="text" id="origCap" placeholder="F.eks. Rommet slik det er nå"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="modalHide()">Avbryt</button>
+      <button class="btn btn-primary" onclick="saveOrig('${id}')">Lagre</button>
+    </div>`);
+}
+function saveOrig(id){
+  if(!origImg){alert('Velg eller lim inn et bilde først.');return;}
+  db.collection('items').add({room:id,kind:'original',img:origImg,
+    caption:document.getElementById('origCap').value.trim(),created:Date.now()})
+    .then(()=>modalHide())
+    .catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
+}
+function delOrig(id,iid){if(confirm('Slette dette bildet?'))db.collection('items').doc(iid).delete();}
 
 /* ---------- Products ---------- */
 let prodImg='', editingProd=null;
@@ -615,7 +733,7 @@ function compressImage(src,cb){
   img.src=src;
 }
 function setImg(src,type){
-  if(type==='prod')prodImg=src;else inspImg=src;
+  if(type==='prod')prodImg=src;else if(type==='orig')origImg=src;else inspImg=src;
   const pv=document.getElementById('preview');
   if(pv){pv.src=src;pv.style.display='block';}
 }
@@ -623,7 +741,7 @@ function setImg(src,type){
 /* ---------- Lightbox ---------- */
 function zoom(itemId,type,roomId){
   const d=room(roomId);
-  const list=type==='insp'?d.inspiration:d.products;
+  const list=type==='insp'?d.inspiration:type==='orig'?(d.originals||[]):d.products;
   const it=list.find(x=>x.id===itemId);
   if(it&&it.img){document.getElementById('lightboxImg').src=it.img;
     document.getElementById('lightbox').classList.add('show');}
