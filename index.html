@@ -420,10 +420,26 @@ function toggleShopping(iid,done){
 function delShopping(iid){if(confirm('Slette denne varen fra lista?'))db.collection('items').doc(iid).delete();}
 
 /* ---------- To Do ---------- */
+let editingTodoId=null;
 function sortedTodos(){return data.todos.slice().sort((a,b)=>(a.order??a.created??0)-(b.order??b.created??0));}
 function todoHTML(){
   const items=sortedTodos();
-  const rows=items.map(it=>`
+  const rows=items.map(it=>{
+    if(it.id===editingTodoId){
+      return `
+    <div class="shop-row todo-row">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <span class="drag-handle" style="visibility:hidden">⠿</span>
+        <input type="text" id="todoEdit_${it.id}" value="${escAttr(it.text)}" maxlength="200" style="flex:1"
+          onkeydown="if(event.key==='Enter')saveTodoEdit('${it.id}');if(event.key==='Escape')cancelTodoEdit();">
+      </span>
+      <span>
+        <button class="del" onclick="saveTodoEdit('${it.id}')">Lagre</button>
+        <button class="del" onclick="cancelTodoEdit()">Avbryt</button>
+      </span>
+    </div>`;
+    }
+    return `
     <div class="shop-row todo-row" draggable="true" data-id="${it.id}"
       ondragstart="todoDragStart(event)" ondragover="todoDragOver(event)"
       ondrop="todoDrop(event)" ondragend="todoDragEnd(event)">
@@ -434,8 +450,12 @@ function todoHTML(){
           <span>${esc(it.text)}</span>
         </label>
       </span>
-      <button class="del" onclick="delTodo('${it.id}')">Slett</button>
-    </div>`).join('');
+      <span>
+        <button class="del" onclick="editTodoStart('${it.id}')">Rediger</button>
+        <button class="del" onclick="delTodo('${it.id}')">Slett</button>
+      </span>
+    </div>`;
+  }).join('');
   return `
     <div class="page-head"><div><h1>✅ To Do</h1>
       <p class="sub">Alt som skal gjøres. Dra i punktene for å endre rekkefølge, kryss av når noe er ferdig.</p></div></div>
@@ -458,6 +478,21 @@ function addTodo(){
 }
 function completeTodo(iid){db.collection('items').doc(iid).delete();}
 function delTodo(iid){if(confirm('Slette denne oppgaven?'))db.collection('items').doc(iid).delete();}
+function editTodoStart(id){
+  editingTodoId=id;render();
+  const inp=document.getElementById('todoEdit_'+id);
+  if(inp){inp.focus();inp.select();}
+}
+function cancelTodoEdit(){editingTodoId=null;render();}
+function saveTodoEdit(id){
+  const inp=document.getElementById('todoEdit_'+id);if(!inp)return;
+  const text=inp.value.trim();
+  if(!text){alert('Oppgaven kan ikke være tom.');return;}
+  editingTodoId=null;
+  db.collection('items').doc(id).update({text})
+    .then(()=>render())
+    .catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
+}
 let dragTodoId=null;
 function todoDragStart(e){
   dragTodoId=e.currentTarget.dataset.id;
