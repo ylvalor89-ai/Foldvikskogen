@@ -1,6 +1,6 @@
-# Foldviksskogen – Innredningsplanlegger
+# Foldvikskogen – Innredningsplanlegger
 
-En liten, personlig nettside for å planlegge innredningen av huset på Foldviksskogen.
+En liten, personlig nettside for å planlegge innredningen av huset på Foldvikskogen.
 
 ## Hva den gjør
 - Meny med alle rommene i huset (Barnerom, Kontor/lager, Ylvas soverom, Amunds soverom, Stue, Kjøkken, Bad, Gang, Uteplass, Veranda)

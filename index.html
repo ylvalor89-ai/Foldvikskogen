@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Foldviksskogen – Innredningsplanlegger</title>
+<title>Foldvikskogen – Innredningsplanlegger</title>
 <style>
   :root{
     --bg:#f4f1ec; --panel:#ffffff; --ink:#2c2a26; --muted:#8a857c;
@@ -105,6 +105,11 @@
   .shop-check{display:flex;align-items:center;gap:10px;font-size:14.5px;cursor:pointer}
   .shop-check input{width:auto;accent-color:var(--accent)}
   .shop-row.done .shop-check span{text-decoration:line-through;color:var(--muted)}
+  /* To Do */
+  .todo-row{transition:opacity .15s}
+  .todo-row.dragging{opacity:.4}
+  .drag-handle{cursor:grab;color:var(--muted);font-size:14px;line-height:1;user-select:none}
+  .drag-handle:active{cursor:grabbing}
   /* Notes / palette / dims */
   .panel-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     padding:22px;box-shadow:var(--shadow)}
@@ -181,7 +186,7 @@
 <body>
 
 <aside class="sidebar">
-  <div class="brand">Foldviksskogen<small>Innredningsplan</small></div>
+  <div class="brand">Foldvikskogen<small>Innredningsplan</small></div>
   <nav class="nav" id="nav"></nav>
   <div class="io">
     <button onclick="exportData()">⬇ Eksporter</button>
@@ -205,6 +210,7 @@
 <script>
 /* ---------- Rooms ---------- */
 const ROOMS = [
+  {id:'todo',       name:'To Do',            ico:'✅', todo:true},
   {id:'innkjop',    name:'Innkjøp',          ico:'🛒', checklist:true},
   {id:'oversikt',   name:'Oversikt',         ico:'🏠', dashboard:true},
   {id:'barnerom',   name:'Barnerom',         ico:'🧸'},
@@ -240,7 +246,7 @@ const PASSCODE = 'foldvik';           // felles kode dere taster inn
 const KEY = 'foldviksskogen_v1';      // gammel lokal lagring – kun for engangs-migrering
 
 /* ---------- State ---------- */
-let data = {rooms:{}, shopping:[]};
+let data = {rooms:{}, shopping:[], todos:[]};
 let current = 'oversikt';
 let activeTab = 'inspirasjon';
 let pendingRender=false, itemsLoaded=false, metaLoaded=false, migrationChecked=false, shoppingSeedChecked=false;
@@ -249,17 +255,18 @@ function blankRoom(){return {budget:0,notes:'',colors:[],dimensions:'',inspirati
 function room(id){if(!data.rooms[id])data.rooms[id]=blankRoom();return data.rooms[id];}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const kr=n=>(Number(n)||0).toLocaleString('no-NO')+' kr';
-ROOMS.forEach(r=>{if(!r.dashboard&&!r.checklist)data.rooms[r.id]=blankRoom();});
+ROOMS.forEach(r=>{if(!r.dashboard&&!r.checklist&&!r.todo)data.rooms[r.id]=blankRoom();});
 
 /* ---------- Live-synk med Firestore ---------- */
 function startSync(){
   db.collection('items').onSnapshot(snap=>{
-    ROOMS.forEach(r=>{if(!r.dashboard&&!r.checklist){room(r.id).products=[];room(r.id).inspiration=[];room(r.id).originals=[];}});
-    data.shopping=[];
+    ROOMS.forEach(r=>{if(!r.dashboard&&!r.checklist&&!r.todo){room(r.id).products=[];room(r.id).inspiration=[];room(r.id).originals=[];}});
+    data.shopping=[];data.todos=[];
     const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
     docs.sort((a,b)=>(a.created||0)-(b.created||0));
     docs.forEach(it=>{
       if(it.kind==='shopping'){data.shopping.push(it);return;}
+      if(it.kind==='todo'){data.todos.push(it);return;}
       if(!it.room)return;const r=room(it.room);
       if(it.kind==='inspiration')r.inspiration.push(it);
       else if(it.kind==='original')r.originals.push(it);
@@ -325,7 +332,7 @@ function maybeSeedShopping(){
 /* ---------- Kode-skjerm (gate) ---------- */
 function showGate(){
   const g=document.createElement('div');g.className='gate';
-  g.innerHTML=`<div class="gate-box"><h2>Foldviksskogen</h2><p>Skriv inn felles kode</p>
+  g.innerHTML=`<div class="gate-box"><h2>Foldvikskogen</h2><p>Skriv inn felles kode</p>
     <input type="password" id="gateInput" placeholder="Kode">
     <button class="btn btn-primary" id="gateBtn">Åpne</button>
     <div id="gateErr" style="color:#c98b8b;font-size:13px;height:16px;margin-top:8px"></div></div>`;
@@ -345,7 +352,7 @@ function startApp(){render();startSync();}
 function renderNav(){
   const nav=document.getElementById('nav');nav.innerHTML='';
   ROOMS.forEach((r,i)=>{
-    if(i>0&&!r.dashboard&&!r.checklist&&(ROOMS[i-1].dashboard||ROOMS[i-1].checklist)){
+    if(i>0&&!r.dashboard&&!r.checklist&&!r.todo&&(ROOMS[i-1].dashboard||ROOMS[i-1].checklist||ROOMS[i-1].todo)){
       const s=document.createElement('div');s.className='nav-sep';nav.appendChild(s);
     }
     const b=document.createElement('button');
@@ -360,7 +367,7 @@ function renderNav(){
 function render(){
   renderNav();
   const r=ROOMS.find(x=>x.id===current);
-  document.getElementById('main').innerHTML = r.dashboard ? dashboardHTML() : r.checklist ? innkjopHTML() : roomHTML(r);
+  document.getElementById('main').innerHTML = r.dashboard ? dashboardHTML() : r.checklist ? innkjopHTML() : r.todo ? todoHTML() : roomHTML(r);
 }
 
 function innkjopHTML(){
@@ -374,7 +381,7 @@ function innkjopHTML(){
       <button class="del" onclick="delShopping('${it.id}')">Slett</button>
     </div>`).join('');
   const bestilte=[];
-  ROOMS.filter(r=>!r.dashboard&&!r.checklist).forEach(r=>{
+  ROOMS.filter(r=>!r.dashboard&&!r.checklist&&!r.todo).forEach(r=>{
     room(r.id).products.filter(p=>p.status==='bestilt').forEach(p=>bestilte.push({room:r,p}));
   });
   const bestilteRows=bestilte.map(({room:r,p})=>`
@@ -412,14 +419,78 @@ function toggleShopping(iid,done){
 }
 function delShopping(iid){if(confirm('Slette denne varen fra lista?'))db.collection('items').doc(iid).delete();}
 
+/* ---------- To Do ---------- */
+function sortedTodos(){return data.todos.slice().sort((a,b)=>(a.order??a.created??0)-(b.order??b.created??0));}
+function todoHTML(){
+  const items=sortedTodos();
+  const rows=items.map(it=>`
+    <div class="shop-row todo-row" draggable="true" data-id="${it.id}"
+      ondragstart="todoDragStart(event)" ondragover="todoDragOver(event)"
+      ondrop="todoDrop(event)" ondragend="todoDragEnd(event)">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <span class="drag-handle">⠿</span>
+        <label class="shop-check" style="flex:1;min-width:0">
+          <input type="checkbox" onchange="completeTodo('${it.id}')">
+          <span>${esc(it.text)}</span>
+        </label>
+      </span>
+      <button class="del" onclick="delTodo('${it.id}')">Slett</button>
+    </div>`).join('');
+  return `
+    <div class="page-head"><div><h1>✅ To Do</h1>
+      <p class="sub">Alt som skal gjøres. Dra i punktene for å endre rekkefølge, kryss av når noe er ferdig.</p></div></div>
+    <div class="panel-box" style="max-width:520px">
+      <div class="shop-list" id="todoList">${rows||'<div class="empty">Ingen oppgaver ennå.</div>'}</div>
+      <div class="c-row" style="margin-top:14px">
+        <input id="todoNew" placeholder="Legg til noe som skal gjøres…" maxlength="200"
+          onkeydown="if(event.key==='Enter')addTodo()">
+        <button onclick="addTodo()" title="Legg til">➤</button>
+      </div>
+    </div>`;
+}
+function addTodo(){
+  const inp=document.getElementById('todoNew');if(!inp)return;
+  const text=inp.value.trim();if(!text)return;
+  inp.value='';
+  const maxOrder=data.todos.reduce((m,it)=>Math.max(m,it.order??0),-1);
+  db.collection('items').add({kind:'todo',text,order:maxOrder+1,created:Date.now()})
+    .catch(err=>alert('Kunne ikke lagre: '+(err.message||err)));
+}
+function completeTodo(iid){db.collection('items').doc(iid).delete();}
+function delTodo(iid){if(confirm('Slette denne oppgaven?'))db.collection('items').doc(iid).delete();}
+let dragTodoId=null;
+function todoDragStart(e){
+  dragTodoId=e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+function todoDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';}
+function todoDrop(e){
+  e.preventDefault();
+  const targetId=e.currentTarget.dataset.id;
+  if(!dragTodoId||dragTodoId===targetId)return;
+  const items=sortedTodos();
+  const fromIdx=items.findIndex(x=>x.id===dragTodoId);
+  const toIdx=items.findIndex(x=>x.id===targetId);
+  if(fromIdx<0||toIdx<0)return;
+  const [moved]=items.splice(fromIdx,1);
+  items.splice(toIdx,0,moved);
+  items.forEach((it,i)=>{it.order=i;});
+  render();
+  const batch=db.batch();
+  items.forEach((it,i)=>{batch.update(db.collection('items').doc(it.id),{order:i});});
+  batch.commit().catch(err=>alert('Kunne ikke lagre rekkefølgen: '+(err.message||err)));
+}
+function todoDragEnd(e){e.currentTarget.classList.remove('dragging');dragTodoId=null;}
+
 function dashboardHTML(){
   let totBudget=0, counts={vurderer:0,onsker:0,bestilt:0,kjopt:0}, totItems=0, kjoptSum=0;
-  ROOMS.filter(r=>!r.dashboard&&!r.checklist).forEach(r=>{
+  ROOMS.filter(r=>!r.dashboard&&!r.checklist&&!r.todo).forEach(r=>{
     const d=room(r.id);totBudget+=Number(d.budget)||0;
     d.products.forEach(p=>{totItems++;counts[p.status]=(counts[p.status]||0)+1;
       if(p.status==='kjopt')kjoptSum+=Number(p.price)||0;});
   });
-  const rows=ROOMS.filter(r=>!r.dashboard&&!r.checklist).map(r=>{
+  const rows=ROOMS.filter(r=>!r.dashboard&&!r.checklist&&!r.todo).map(r=>{
     const d=room(r.id);const tot=d.products.length;
     const done=d.products.filter(p=>p.status==='kjopt').length;
     const pct=tot?Math.round(done/tot*100):0;
